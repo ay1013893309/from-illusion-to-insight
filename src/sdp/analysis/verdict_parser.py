@@ -2,7 +2,14 @@
 Verdict parsing utilities for extracting judge predictions and confidence.
 """
 import re
-from typing import Tuple, Optional
+from typing import Optional, Tuple
+
+
+VERDICT_PATTERNS = [
+    r"final\s*prediction\s*[:\-]?\s*\**\s*(benign|defective)\s*\**",
+    r"final\s*decision\s*[:\-]?\s*\**\s*(benign|defective)\s*\**",
+    r"prediction\s*[:\-]?\s*\**\s*(benign|defective)\s*\**",
+]
 
 
 def parse_judge_verdict(text: str) -> Tuple[Optional[str], Optional[int]]:
@@ -27,17 +34,24 @@ def parse_judge_verdict(text: str) -> Tuple[Optional[str], Optional[int]]:
     if not text:
         return None, None
 
-    # Normalize text
     text_normalized = text.lower()
 
-    # Regex: match 'final prediction' optionally followed by :, -, whitespace, then optional **, then label
-    pattern = r"final\s*prediction\s*[:\-]?\s*\**\s*(benign|defective)\s*\**"
-    match = re.search(pattern, text_normalized, flags=re.IGNORECASE)
+    for pattern in VERDICT_PATTERNS:
+        match = re.search(pattern, text_normalized, flags=re.IGNORECASE)
+        if match:
+            verdict_str = match.group(1).upper()
+            verdict_int = 0 if verdict_str == "BENIGN" else 1
+            return verdict_str, verdict_int
 
-    if match:
-        verdict_str = match.group(1).upper()
-        verdict_int = 0 if verdict_str == "BENIGN" else 1
-        return verdict_str, verdict_int
+    # Fallback: inspect the tail of the response where the mandated final lines should live.
+    tail = "\n".join(text_normalized.splitlines()[-6:])
+    benign_pos = tail.rfind("benign")
+    defective_pos = tail.rfind("defective")
+    if benign_pos == -1 and defective_pos == -1:
+        return None, None
+    if benign_pos > defective_pos:
+        return "BENIGN", 0
+    return "DEFECTIVE", 1
 
     return None, None
 
@@ -60,16 +74,19 @@ def parse_confidence(text: str) -> Optional[int]:
     if not text:
         return None
 
-    # Try to find "Confidence: XX" or similar
-    pattern = r"confidence\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%?"
-    match = re.search(pattern, text, flags=re.IGNORECASE)
+    patterns = [
+        r"confidence\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%?",
+        r"confidence\s*\((\d+(?:\.\d+)?)\s*%?\)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
 
-    if match:
         conf_str = match.group(1)
         conf_val = float(conf_str)
-        # If it's a decimal between 0 and 1, assume it's a proportion
         if conf_val <= 1.0:
             conf_val = conf_val * 100
-        return int(conf_val)
+        return max(0, min(100, int(conf_val)))
 
     return None

@@ -14,7 +14,7 @@ from pathlib import Path
 from ..llm.wrapper import OpenAIWrapper
 from ..llm.experts import ExpertDebateSystem
 from ..analysis.verdict_parser import parse_judge_verdict, parse_confidence
-from ..analysis.diff import Hunk
+from ..analysis.hunk import Hunk
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ async def async_run_model_single(
     use_rag: bool,
     max_context_lines: int,
     save_path: str,
+    csv_lock: Optional[asyncio.Lock] = None,
     progress_callback: Optional[callable] = None,
     subset_stats_init: Optional[Dict] = None,
 ) -> Tuple[str, Dict]:
@@ -109,10 +110,21 @@ async def async_run_model_single(
 
             # Extract judge response from history
             judge_response = None
-            for round_obj in history:
+            for round_obj in reversed(history):
                 if round_obj.judge_response:
                     judge_response = round_obj.judge_response
                     break
+
+            analyzer_response = None
+            proposer_response = None
+            skeptic_response = None
+            for round_obj in history:
+                if analyzer_response is None and round_obj.analyzer_response:
+                    analyzer_response = round_obj.analyzer_response
+                if round_obj.proposer_response:
+                    proposer_response = round_obj.proposer_response
+                if round_obj.skeptic_response:
+                    skeptic_response = round_obj.skeptic_response
 
             # Parse verdict
             verdict_str, verdict_int = parse_judge_verdict(judge_response or "")
@@ -130,6 +142,9 @@ async def async_run_model_single(
                 "correct": correct,
                 "unparsed": unparsed,
                 "judge_decision": judge_response,
+                "analyzer_response": analyzer_response,
+                "proposer_response": proposer_response,
+                "skeptic_response": skeptic_response,
                 "row_runtime_sec": round(row_runtime, 3),
             })
 
@@ -139,7 +154,8 @@ async def async_run_model_single(
 
         # Thread-safe CSV append
         try:
-            async with asyncio.Lock():
+            lock = csv_lock or asyncio.Lock()
+            async with lock:
                 if os.path.exists(save_path):
                     existing_cols = pd.read_csv(save_path, nrows=0).columns.tolist()
                 else:
@@ -170,9 +186,9 @@ async def test_skeptic_variants_async(
     hunks: List[Hunk],
     skeptic_models: List[str],
     llm_client: OpenAIWrapper,
-    analyzer_model: str = "gpt-4.1-nano-2025-04-14",
-    proposer_model: str = "gpt-4.1-nano-2025-04-14",
-    judge_model: str = "gpt-4.1-nano-2025-04-14",
+    analyzer_model: str = "deepseek-v4-flash",
+    proposer_model: str = "deepseek-v4-flash",
+    judge_model: str = "deepseek-v4-flash",
     debate_rounds: int = 1,
     use_rag: bool = False,
     max_context_lines: int = 400,
@@ -244,8 +260,9 @@ async def test_skeptic_variants_async(
     processed_keys = set()
     if os.path.exists(save_path):
         df_existing = pd.read_csv(save_path)
+        df_completed = df_existing[df_existing["verdict_int"].notna()].copy()
         processed_keys = set(
-            zip(df_existing["skeptic_model"].astype(str), df_existing["file_path"].astype(str))
+            zip(df_completed["skeptic_model"].astype(str), df_completed["file_path"].astype(str))
         )
 
     # Filter new work
@@ -257,6 +274,8 @@ async def test_skeptic_variants_async(
     logger.info(f"Total work items: {sum(len(v) for v in work_per_model.values())}")
 
     # Run with per-model concurrency
+    csv_lock = asyncio.Lock()
+
     async def run_model_with_limit(model, tasks_for_model):
         sem = asyncio.Semaphore(per_model_concurrency)
 
@@ -273,6 +292,7 @@ async def test_skeptic_variants_async(
                     use_rag=use_rag,
                     max_context_lines=max_context_lines,
                     save_path=save_path,
+                    csv_lock=csv_lock,
                 )
 
         return await asyncio.gather(*(run_one(fp, h, subset) for fp, h, subset in tasks_for_model))

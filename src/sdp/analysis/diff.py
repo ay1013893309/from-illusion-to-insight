@@ -85,3 +85,12 @@ def unified_diff(src1: str, src2: str, fromfile: str = "SRC1", tofile: str = "SR
     b = src2.splitlines(keepends=False)
     ud = difflib.unified_diff(a, b, fromfile=fromfile, tofile=tofile, lineterm="")
     return "\n".join(list(ud))
+
+
+def compute_diffs(src1: str, src2: str) -> Dict[str, List[Tuple]]:
+    """
+    Backward-compatible diff helper used by older notebook-derived code.
+    """
+    diffs = compute_diff(src1, src2)
+    diffs["unified"] = unified_diff(src1, src2).splitlines()
+    return diffs

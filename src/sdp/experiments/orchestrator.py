@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from ..llm.wrapper import OpenAIWrapper
 from .evaluator import test_skeptic_variants_async
-from ..analysis.diff import Hunk
+from ..analysis.hunk import Hunk
 
 logger = logging.getLogger(__name__)
 

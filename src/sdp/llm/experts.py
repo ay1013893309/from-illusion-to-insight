@@ -8,6 +8,7 @@ import time
 
 from .wrapper import OpenAIWrapper
 from ..prompts.loader import load_all_prompts
+from ..analysis.verdict_parser import parse_confidence, parse_judge_verdict
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,10 @@ class ExpertDebateSystem:
     def __init__(
         self,
         llm_client: OpenAIWrapper,
-        analyzer_model: str = "gpt-4.1-nano-2025-04-14",
-        proposer_model: str = "gpt-4.1-nano-2025-04-14",
-        skeptic_model: str = "gpt-4.1-nano-2025-04-14",
-        judge_model: str = "gpt-4.1-nano-2025-04-14",
+        analyzer_model: str = "deepseek-v4-flash",
+        proposer_model: str = "deepseek-v4-flash",
+        skeptic_model: str = "deepseek-v4-flash",
+        judge_model: str = "deepseek-v4-flash",
         temperature: float = 0.7,
         max_rounds: int = 3,
     ):
@@ -271,17 +272,13 @@ class ExpertDebateSystem:
     @staticmethod
     def _extract_confidence(response: str) -> int:
         """Extract confidence percentage from Judge response."""
-        import re
-        match = re.search(r"Confidence:\s*(\d+)", response)
-        if match:
-            return int(match.group(1))
-        return 50  # Default to 50% if not found
+        confidence = parse_confidence(response)
+        return confidence if confidence is not None else 50  # Default to 50% if not found
     
     @staticmethod
     def _extract_prediction(response: str) -> str:
         """Extract final prediction (BENIGN or DEFECTIVE) from Judge response."""
-        import re
-        match = re.search(r"Final Prediction:\s*(BENIGN|DEFECTIVE)", response)
-        if match:
-            return match.group(1)
+        verdict_str, _ = parse_judge_verdict(response)
+        if verdict_str is not None:
+            return verdict_str
         return "INCONCLUSIVE"

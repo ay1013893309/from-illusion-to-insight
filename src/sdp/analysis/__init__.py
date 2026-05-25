@@ -2,7 +2,7 @@
 Analysis helpers for change-aware defect prediction.
 """
 
-from .diff import compute_diff, format_diffs, unified_diff
+from .diff import compute_diff, compute_diffs, format_diffs, unified_diff
 from .java_parse import (
     find_java_classes,
     find_java_methods,
@@ -28,6 +28,7 @@ from .file_matching import (
 
 __all__ = [
     "compute_diff",
+    "compute_diffs",
     "format_diffs",
     "unified_diff",
     "find_java_classes",
@@ -43,4 +44,14 @@ __all__ = [
     "remove_exact_matches",
     "match_ast_files",
     "match_files_full",
+    "match_files_and_create_hunks",
 ]
+
+
+def match_files_and_create_hunks(*args, **kwargs):
+    """
+    Compatibility wrapper kept for notebook-derived imports.
+    """
+    from ..data.loader import match_files_and_create_hunks as _match_files_and_create_hunks
+
+    return _match_files_and_create_hunks(*args, **kwargs)

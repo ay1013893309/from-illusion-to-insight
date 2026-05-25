@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cpdp-change-aware"
+version = "0.1.0"
+description = "Cross-project, change-aware defect prediction with AST-aware features, retrieval-based transfer, and multi-agent debate."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "python-dotenv",
+    "openai",
+]
+
+[project.scripts]
+cpdp-change-aware = "cpdp_change_aware.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

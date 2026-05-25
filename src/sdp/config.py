@@ -17,7 +17,7 @@ DATA_DIR = os.getenv('DATA_DIR', 'data/')
 llm7_all_models = [
     "gpt-4.1-nano-2025-04-14",
     "gpt-5-mini",
-    "deepseek-v3.1",
+    "deepseek-v4-flash",
     "mistral-small-3.1-24b-instruct-2503",
     "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
     "codestral-2405",
